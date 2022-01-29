@@ -14,7 +14,6 @@
 #include <queue>
 #include <map>
 
-#define SERVER_PORT 1112
 #define QUEUE_SIZE 10
 #define MSG_SIZE 7
 #define BUFF_SIZE 1024
@@ -29,6 +28,8 @@
 #define protocol_size 7
 
 using namespace std;
+
+int SERVER_PORT = 1111;
 
 struct c_string {
     char str[MSG_SIZE];
@@ -55,6 +56,7 @@ class Game {
     // int player1;
     // int player2;
     int board[8][8];
+    int the_end;
 
     Game()
     {
@@ -70,36 +72,36 @@ class Game {
     }
 
     public:
-    void setWhite(int id) //black here
+    void setBlack(int id) //black here
     {
-        this->board[2][1] = id;
-        this->board[2][3] = id;
-        this->board[2][5] = id;
-        this->board[2][7] = id;
-        this->board[1][0] = id;
-        this->board[1][2] = id;
-        this->board[1][4] = id;
-        this->board[1][6] = id;
-        this->board[0][1] = id;
-        this->board[0][3] = id;
-        this->board[0][5] = id;
-        this->board[0][7] = id;
+        this->board[2][0] = id;
+        this->board[2][2] = id;
+        this->board[2][4] = id;
+        this->board[2][6] = id;
+        this->board[1][1] = id;
+        this->board[1][3] = id;
+        this->board[1][5] = id;
+        this->board[1][7] = id;
+        this->board[0][0] = id;
+        this->board[0][2] = id;
+        this->board[0][4] = id;
+        this->board[0][6] = id;
     }
     
-    void setBlack(int id) //red here
+    void setWhite(int id) //red here
     {
-        this->board[5][0] = id;
-        this->board[5][2] = id;
-        this->board[5][4] = id;
-        this->board[5][6] = id;
-        this->board[6][1] = id;
-        this->board[6][3] = id;
-        this->board[6][5] = id;
-        this->board[6][7] = id;
-        this->board[7][0] = id;
-        this->board[7][2] = id;
-        this->board[7][4] = id;
-        this->board[7][8] = id;
+        this->board[5][1] = id;
+        this->board[5][3] = id;
+        this->board[5][5] = id;
+        this->board[5][7] = id;
+        this->board[6][0] = id;
+        this->board[6][2] = id;
+        this->board[6][4] = id;
+        this->board[6][6] = id;
+        this->board[7][1] = id;
+        this->board[7][3] = id;
+        this->board[7][5] = id;
+        this->board[7][7] = id;
         
     }
 };
@@ -117,31 +119,110 @@ struct thread_data_t
 //-1 - empty
 int board[board_dim][board_dim];
 
+// cvheck if we are inside the board
 bool checkBasic(int fx, int fy, int tx, int ty) 
 {
-    //basic check here
+    printf("[CHECK] [are we inside the board] %d %d %d %d\n", fx, fy, tx, ty);
+    if (fx < 1 || fx > 8) return false;
+    if (fy < 1 || fy > 8) return false;
+    if (tx < 1 || tx > 8) return false;
+    if (ty < 1 || ty > 8) return false;
+    printf("[CHECK] [we shouldn't be the same] %d %d %d %d\n", fx, fy, tx, ty);
+    if (fx == tx && fy == ty) return false;
+
+    return true;
 }
 
-void updateArray(int fx, int fy, int tx, int ty, &boa)
+// delete first position, create a second one
+void updateArray(int fx, int fy, int tx, int ty, int boa[][board_dim], int player)
 {
-    //update array here
+    boa[fx][fy] = -1;
+    boa[tx][ty] = player;
 }
 
-bool checkIfProper(string check_this, int *bo){
+int abs(int a)
+{
+    if (a < 0) 
+        return a * (-1);
+    return a;
+}
+
+// check if a move is proper
+bool checkIfProper(string check_this, int id,  int bo[][board_dim]){
     int fromx = check_this[3] - '0';
     int fromy = check_this[4] - '0';
     int tox = check_this[5] - '0';
     int toy = check_this[6] - '0';
+    int player = id;
+
+    for (int x = 0; x < 8; x++) {
+        for (int y = 0; y < 8; y++) {
+            if (bo[x][y] == -1) printf("  "); 
+            else printf("%d ", bo[x][y]);
+        }
+        printf("\n");
+    }
 
     if (checkBasic(fromx, fromy, tox, toy))
     {
-        //check with pawns here
-        updateArray(fromx, fromy, tox, toy, &bo)
-        return 1;
+        fromx = abs(fromx - 8)%8;
+        fromy--;
+        tox = abs(tox-8)%8;
+        toy--;
+        //it must be mine	
+        printf("[CHECK] [it must be mine] %d != %d\n", bo[fromx][fromy], player);
+        if (bo[fromx][fromy] != player) return false;
+        //destination must be empty
+        printf("[CHECK] [destination not empty] %d != -1\n", bo[tox][toy]);
+        if (bo[tox][toy] != -1) return false;
+        //only crossing moves
+        printf("[CHECK] [only crossing moves] %d == %d, %d == %d\n", fromx, tox, fromy, toy);
+        if (fromx == tox || fromy == toy) return false;
+
+        //if kill, check if there it is an oponent in this place
+        printf("[CHECK] [check if player is killed]\n");
+
+        if (abs(fromx-tox) == 2 && abs(fromy-toy) == 2) {
+        
+            if ((bo[fromx-1][fromy-1] == -1 || bo[fromx-1][fromy-1] == player) && fromx - 2 == tox && fromy - 2 == toy) return false;
+            else if ((bo[fromx-1][fromy+1] == -1 || bo[fromx-1][fromy+1] == player) && fromx - 2 == tox && fromy + 2 == toy) return false;
+            else if ((bo[fromx+1][fromy-1] == -1 || bo[fromx+1][fromy-1] == player) && fromx + 2 == tox && fromy - 2 == toy) return false;
+            else if ((bo[fromx+1][fromy+1] == -1 || bo[fromx+1][fromy+1] == player) && fromx + 2 == tox && fromy + 2 == toy) return false;
+            else if (fromx + 2 == tox && fromy + 2 == toy) bo[fromx+1][fromy+1] = -1;
+            else if (fromx + 2 == tox && fromy - 2 == toy) bo[fromx+1][fromy-1] = -1;
+            else if (fromx - 2 == tox && fromy + 2 == toy) bo[fromx-1][fromy+1] = -1;
+            else if (fromx - 2 == tox && fromy - 2 == toy) bo[fromx-1][fromy-1] = -1;
+            updateArray(fromx, fromy, tox, toy, bo, player);
+            printf("[CHECK] Someone died!!\n");
+            return true;
+        }
+        //if move too far away, deny
+        else if (abs(fromx - tox) > 1 || abs(fromy - toy) > 1) {
+            printf("[CHECK] [u moved too far] %d > 1, %d > 1\n", abs(fromx - tox), abs(fromy - toy));
+            return false;
+        }
+
+        updateArray(fromx, fromy, tox, toy, bo, player);
+        
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                if (bo[x][y] == -1) printf("  "); 
+                else printf("%d ", bo[x][y]);
+            }
+            printf("\n");
+        }
+
+        return true;
     }
 
-    if (check_this == "9999999") return 0;
-    return 0;
+    // if (check_this == "9999999") return 0;
+    return false;
+}
+
+string createID(int sd)
+{
+    string socket = sd > 9 ? to_string(sd) : "0" + to_string(sd);
+    return socket;
 }
 
 void *ThreadBehavior(void *t_data)
@@ -154,16 +235,13 @@ void *ThreadBehavior(void *t_data)
 
     printf("[BORN] [ID %d]\n", this_index);
     turn[this_index] = false;
-    c_string empty_msg, comunicate;
-    strncpy(empty_msg.str, "0000000", MSG_SIZE);
-    lock(mutex_msg);
-    msg[this_index] = empty_msg;
-    unlock(mutex_msg);
+    // c_string empty_msg, comunicate;
+    // strncpy(empty_msg.str, "0000000", MSG_SIZE);
+    // lock(mutex_msg);
+    // msg[this_index] = empty_msg;
+    // unlock(mutex_msg);
 
     while(1) { 
-        printf("[AGAIN] [ID %d]\n", this_index);
-        // bzero(th_data->buff, BUFF_SIZE);
-        printf("[LOG] [ID %d] Oponent: %d, Empty waiting room: %d\n", this_index, th_data->oponent, waiting_room.empty());
         while (th_data->oponent == -9) {
                 printf("[DEBUG] [ID %d] -9\n", this_index);
                 // lock(mutex_queue);
@@ -172,16 +250,15 @@ void *ThreadBehavior(void *t_data)
                 printf("[LOG] [ID %d] I'm in\n", this_index);
                 turn[this_index] = true;
                 games[this_index] = new Game();
-                games[this_index].setWhite(this_index);
+                games[this_index]->setWhite(this_index);
+                games[this_index]->the_end = 0;
                 waiting_room.push(this_index);
                 // unlock(mutex_queue);
                 printf("[LOG] [ID %d] SLEEP on mutex_queue\n", this_index);
-                string identity_beg = "i" + to_string(th_data->connection_socket_descriptor) + "0";
+                string identity_beg = createID(th_data->connection_socket_descriptor) + "0";
                 const char* ib = identity_beg.c_str();
                 write(th_data->connection_socket_descriptor, ib, strlen(ib));
 
-                const char welcome[8] = { '0', '0', '0', '0', '0', '0', '0', '\0' };
-                write(th_data->connection_socket_descriptor, &welcome, 8);
                 wait(&partner, &mutex_queue);
                 lock(mutex_map);
                 if (players.count(this_index) == 1) {
@@ -200,12 +277,12 @@ void *ThreadBehavior(void *t_data)
                 players[temp_id] = this_index;
                 th_data->oponent = temp_id;
                 players[this_index] = temp_id;
-                games[this_index] = &games[th_data->oponent];
-                games[this_index].setBlack(this_index);
-
+                games[this_index] = games[th_data->oponent];
+                games[this_index]->setBlack(this_index);
+                games[this_index]->the_end = 0;
                 unlock(mutex_map);
                 
-                string identity_beg = "i" + to_string(th_data->connection_socket_descriptor) + "1";
+                string identity_beg = createID(th_data->connection_socket_descriptor) + "1";
                 const char* ib = identity_beg.c_str();
                 write(th_data->connection_socket_descriptor, ib, strlen(ib)+1);
 
@@ -225,14 +302,25 @@ void *ThreadBehavior(void *t_data)
             //IDAXXYY
             std::string fullmsg = "";
             char buff;
+            int if_proper = 1;
             
-            while (read(th_data->connection_socket_descriptor, &buff, sizeof(char)) > 0) { 
+            while (if_proper = read(th_data->connection_socket_descriptor, &buff, sizeof(char)) > 0) { 
                     if(buff == '\x0a') continue;
                     fullmsg += buff;
                     if (fullmsg.size() == protocol_size) break;
                 }
+                if (if_proper == 0) 
+                {
+                    // -> ustaw w klasie, że koniec
+                    games[this_index]->the_end = 1;
+                    // -> ustaw turę przeciwnika
+                    turn[this_index] = false;
+                    turn[th_data->oponent] = true;
+                    // -> obudź przeciwnika
+                    broadcast(&cond_msg);
+                }
 
-            while(!checkIfProper(fullmsg, &games[this_index])) {
+            while(!checkIfProper(fullmsg, this_index, games[this_index]->board)) {
                 fullmsg = "ERROR";
                 const char *pack = fullmsg.c_str();
                 write(th_data->connection_socket_descriptor, pack, strlen(pack)+1);
@@ -243,30 +331,35 @@ void *ThreadBehavior(void *t_data)
                     if (fullmsg.size() == protocol_size) break;
                 }
 
-                break;
             }
-            // strncpy(comunicate.str, th_data->buff, BUFF_SIZE);
-            // lock(mutex_msg);
-            // strncpy(comunicate.str, "MSG", MSG_SIZE);
+
             strncpy(msg[this_index].str, fullmsg.c_str(), MSG_SIZE);
             printf("[LOG] [ID %d] [saving] %s (%ld)\n", this_index, msg[this_index].str, sizeof(msg[this_index].str));
-            // msg[this_index] = comunicate;
-            // unlock(mutex_msg);
-            //SEND ACCEPT TO THE FRONTEND
-                        
+           
+            //SEND ACCEPT TO THE FRONTEND        
             fullmsg = "ACCEPT";
             const char *pack = fullmsg.c_str();
             write(th_data->connection_socket_descriptor, pack, strlen(pack));
             fullmsg = "";
             turn[this_index] = false;
             turn[th_data->oponent] = true;
-            games
             broadcast(&cond_msg);
         }
         else {
             while(!turn[this_index]) {
                 printf("[LOG] [ID %d] Not my turn", this_index);
                 wait(&cond_msg, &mutex_msg);
+            }
+            
+            // -> jeżeli w klasie ustawiono koniec gry
+            if (games[this_index]->the_end) 
+            {
+            // -> zamknij socket
+                    close(th_data->connection_socket_descriptor);
+            // (posprzątaj??)
+                    free(t_data);
+            // zakończ wątek
+                    pthread_exit(NULL);
             }
 
             //SEND MSG TO THE FRONTEND
@@ -278,14 +371,24 @@ void *ThreadBehavior(void *t_data)
             unlock(mutex_msg);
         }
 
-
-
     }
 
+    // -> ustaw w klasie, że koniec
+    games[this_index]->the_end = 1;
+    // -> ustaw turę przeciwnika
+    turn[this_index] = false;
+    turn[th_data->oponent] = true;
+    // -> obudź przeciwnika
+    broadcast(&cond_msg);
+
+    printf(" >>>> posprzątaj\n");
+
+    // -> zamknij socket
     close(th_data->connection_socket_descriptor);
     free(t_data);
     pthread_exit(NULL);
 }
+
 
 void handleConnection(int connection_socket_descriptor) {
     int create_result = 0;
@@ -304,6 +407,7 @@ void handleConnection(int connection_socket_descriptor) {
 
 }
 
+
 int main(int argc, char* argv[])
 {
    int server_socket_descriptor;
@@ -312,6 +416,12 @@ int main(int argc, char* argv[])
    int listen_result;
    char reuse_addr_val = 1;
    struct sockaddr_in server_address;
+
+//    if (argc == 1) {
+//    }
+       SERVER_PORT = atoi(argv[1]);
+    
+   printf("[INFO] port serwera ustawiony na: %d", SERVER_PORT);
 
    memset(&server_address, 0, sizeof(struct sockaddr));
    server_address.sin_family = AF_INET;

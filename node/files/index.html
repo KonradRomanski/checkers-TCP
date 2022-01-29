@@ -2,107 +2,190 @@
 
 <head>
     <link rel="stylesheet" href="styles.css">
-    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous"> -->
     <script src="//unpkg.com/alpinejs" defer></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 </head>
 
-<body x-init="console.log('initialized')">
-    <!-- <div id="checker-board" class="bootstrap-off"> -->
-    <div id="checker-board">
-        <template x-for='x in 8'>
-            <template x-for='y in 8'>
-                <div :class="((x+y) % 2 == 0 ? 'light' : 'dark') + ' square'" :id='`${x}${y}`'
-                    @click='$store.to = `${x}${y}`'>
-                    <template x-if="$store.red.includes(`${x}${y}`)">
-                        <div class="red checker"></div>
+<body x-init="console.log('initialized')" x-data="{endgame: () => { return $store.red == 0 || $store.black == 0  }}">
+    <template x-if='(!!endgame())'>
+        Game Over
+    </template>
+    <template x-if="($store.whoami && !endgame())">
+        <div>
+            <div style="display: flex; flex-direction: row">
+                <template x-for="r in $store.red">
+                    <div class='red checker' x-text='r'></div>
+                </template>
+            </div>
+
+            <div style="display: flex; flex-direction: row">
+                <template x-for="b in $store.black">
+                    <div class='black checker' x-text='b'></div>
+                </template>
+            </div>
+
+            <div id="checker-board">
+                <template x-for='x in 8'>
+                    <template x-for='y in 8'>
+                        <div :class="((x+y) % 2 == 0 ? 'light' : 'dark') + ' square'" :id='`${x}${y}`'
+                            @click='$store.to = `${x}${y}`'>
+                            <template x-if="($store.red.includes(`${x}${y}`) && $store.whoami === 'red')">
+                                <div class="red checker" @click='$store.from = `${x}${y}`'></div>
+                            </template>
+                            <template x-if="($store.red.includes(`${x}${y}`) && $store.whoami !== 'red')">
+                                <div class="red checker">*</div>
+                            </template>
+                            <template x-if="$store.black.includes(`${x}${y}`)">
+                                <div class="black checker" @click='$store.from = `${x}${y}`'></div>
+                            </template>
+                        </div>
                     </template>
-                    <template x-if="$store.black.includes(`${x}${y}`)">
-                        <div class="black checker" @click='$store.from = `${x}${y}`'></div>
-                    </template>
-                </div>
-            </template>
-        </template>
+                </template>
 
-        <!-- <template x-for='i in 12'>
-            <div class="black checker" x-bind:id="`black-checker-` + i" @click='from = `black-checker-${i}`'></div>
-        </template> -->
+            </div>
+        </div>
+
+    </template>
 
 
-        <!-- <template x-for='i in 12'>
-            <div class="red checker" x-bind:id="`red-checker-` + i" @click='from = `red-checker-${i}`'></div>
-        </template> -->
+    <!-- <form @submit.prevent="" action="/move" method="POST"> -->
+    From: <input type="text" name="first_name" x-model='$store.from'> <br>
+    To: <input type="text" name="last_name" x-model='$store.to'>
+    <input type="button" @click="async () => await send()" value="Submit" x-show="($store.kto === 'My turn')")>
+    <input type="button" value="Submit" disabled x-show="($store.kto === 'Enemy turn')" )>
+    <!-- </form> -->
 
-    </div>
-
-    <form @submit.prevent="() => send()" action="/move" method="POST">
-        From: <input type="text" name="first_name" x-model='$store.from'> <br>
-        To: <input type="text" name="last_name" x-model='$store.to'>
-        <input type="submit" value="Submit">
-    </form>
-
+    <button @click="async () => await acceptMove()">check status</button>
 
     <button @click="() => enemyMove()">enemy?</button>
 
+    <template x-if="($store.whoami === '')">
+        <button @click="() => whoami()">who am I?</button>
+    </template>
+    
+
+    <hr />
+
+    <pre id="colo"></pre>
+    <span x-text='$store.kto'> </span>
+
     <script>
-        // function place() {
 
-        //     let board = document.getElementById('checker-board');
-        //     let redCheckers = [];
-        //     let blackCheckers = [];
+        const enemy = () => {
+            if (Alpine.store('whoami') === 'red') return 'black'
+            return 'red'
+        }
 
-        //     for (let i = 1; i <= 12; i++) {
-        //         let redChecker = document.getElementById('red-checker-' + i);
-        //         let blackChecker = document.getElementById('black-checker-' + i);
-        //         console.log(redChecker, blackChecker)
+        function usunZbity(from, to, who) {
+            if (czyBicie(from, to)) {
+                // console.log(czyBicie(from, to), bicie(from, to))
+                // console.warn(
+                //     {
+                //         before: Alpine.store(who),
+                //         after: Alpine.store(who).filter(el => el !== bicie(from, to))
+                //     }
+                // );
 
-        //         let col = (i - 1) % 4;
-        //         let row = Math.floor((i - 1) / 4);
+                Alpine.store(who,
+                    Alpine
+                    .store(who)
+                    .filter(el => el !== bicie(from, to))
+                    .filter(el => !!el)
+                )
+            }
+        }
 
-        //         redChecker.style.top = 50 + 50 * row - 45;
-        //         redChecker.style.left = 100 + 100 * col - 95 + (row === 1 ? 50 : 0);
-
-        //         blackChecker.style.top = 310 - (50 * row - 45);
-        //         blackChecker.style.left = 100 + 100 * col - 95 + (row !== 1 ? 50 : 0);
-
-        //         redCheckers.push(redChecker);
-        //         blackCheckers.push(blackChecker);
-        //     }
-        // }
         function enemyMove() {
-            let enemy = ''
             // while(enemyMove == ''){
             axios
                 .get('/enemy')
                 .then(({ data }) => {
                     console.log('enemy move:', data);
-                    const {from, to} = data
-                    const oldBlacks = Alpine.store('red');
-                    const newBlacks = [...oldBlacks.filter(el => el != from), to]
-                    Alpine.store('red', newBlacks)
+                    if (data == '') return;
+
+                    Alpine.store('kto', 'My turn')
+                    const { from, to } = data
+                    if(data.from === '' || data.to === '') return;
+
+                    const oldBlacks = Alpine.store(enemy());
+                    const newBlacks = [...oldBlacks.filter(el => el !== from), to]
+                    Alpine.store(enemy(), newBlacks)
+
+                    usunZbity(from, to, Alpine.store('whoami'))
                 })
             // }
         }
-        function send() {
+
+        function czyBicie(from, to) {
+            const [fromx, fromy] = from.split('').map(el => Number(el));
+            const [tox, toy] = to.split('').map(el => Number(el));
+            console.log("[LOG CzyBicie]", { fromx, fromy }, { tox, toy });
+            if (Math.abs(fromx - tox) == 2) {
+                return true;
+            }
+            return false
+        }
+
+        async function acceptMove() {
             const from = Alpine.store('from');
             const to = Alpine.store('to');
-            if (from !== '' && to !== '' && from !== to)
+
+            const res = (await axios.get('/status')).data.status
+
+            console.log('response:', res);
+            if (res === 'ACCEPT') {
+                const oldBlacks = Alpine.store(Alpine.store('whoami'));
+                let newBlacks = [...oldBlacks.filter(el => el !== from), to]
+                console.warn(czyBicie(from, to), bicie(from, to))
+                Alpine.store(Alpine.store('whoami'), newBlacks)
+                usunZbity(from, to, enemy())
+                Alpine.store('kto', 'Enemy turn')
+                // setTimeout(() => enemyMove(), 5000);
+            }
+            if (res === 'ERROR') {
+                alert("Wrong move, try again")
+            }
+
+            Alpine.store('from', '');
+            Alpine.store('to', '');
+        }
+
+        function bicie(from, to) {
+            const [fromx, fromy] = from.split('').map(el => Number(el));
+            const [tox, toy] = to.split('').map(el => Number(el));
+            console.log("[LOG Bicie]", { fromx, fromy }, { tox, toy });
+            if (fromx + 2 == tox && fromy + 2 == toy) return `${fromx + 1}${fromy + 1}`;
+            else if (fromx + 2 == tox && fromy - 2 == toy) return `${fromx + 1}${fromy - 1}`;
+            else if (fromx - 2 == tox && fromy + 2 == toy) return `${fromx - 1}${fromy + 1}`;
+            else if (fromx - 2 == tox && fromy - 2 == toy) return `${fromx - 1}${fromy - 1}`;
+        }
+
+        async function send() {
+            const from = Alpine.store('from');
+            const to = Alpine.store('to');
+            if (from !== '' && to !== '' && from !== to) {
+                
+
                 axios
                     .post('/move', { from, to })
-                    .then(res => {
-                        console.log('response:', res);
-                        if (res.data === 'ACCEPT') {
-                            const oldBlacks = Alpine.store('black');
-                            const newBlacks = [...oldBlacks.filter(el => el != from), to]
-                            Alpine.store('black', newBlacks)
-                            setTimeout(() => enemyMove(), 5000);
-                        }
-                        if (res.data === 'ERROR') {
-                            alert("Wrong move, try again")
-                        }
-                    })
-            Alpine.store('from', '');
-            Alpine.store('to', '')
+                    .catch(e => console.error(e))
+
+                await acceptMove();
+                // .then(res => {
+                //     console.log('response:', res);
+                //     if (res.data === 'ACCEPT') {
+                //         const oldBlacks = Alpine.store(Alpine.store('whoami'));
+                //         let newBlacks = [...oldBlacks.filter(el => el !== from), to]
+                //         console.warn(czyBicie(from, to), bicie(from, to))
+                //         Alpine.store(Alpine.store('whoami'), newBlacks)
+                //         usunZbity(from, to, enemy())
+                //         // setTimeout(() => enemyMove(), 5000);
+                //     }
+                //     if (res.data === 'ERROR') {
+                //         alert("Wrong move, try again")
+                //     }
+                // })
+            }
         }
         document.addEventListener('alpine:init', () => {
             Alpine.store('black', [
@@ -117,10 +200,18 @@
             ])
             Alpine.store('from', '')
             Alpine.store('to', '')
+            Alpine.store('whoami', '')
+            Alpine.store('kto', '')
         })
-        // document.addEventListener('alpine:initialized', () => {
-        //     place();
-        // })
+        async function whoami() {
+            const who = (await axios.get('/whoami')).data
+            console.log({ who })
+            document.querySelector('#colo').innerHTML = who.color
+            Alpine.store('whoami', who.color)
+            Alpine.store('kto', who.color === 'black' ? 'My turn' : 'Enemy turn')
+        }
+
+        // todo: jeżeli status o zakończeniu, to wyświetl komunikat i zablokuj kontrole
     </script>
 </body>
 

@@ -4,15 +4,19 @@ var app = express();
 
 const net = require('net');
 
-const PORT = 1112;
+const appPort = process.argv[2] || 8000;
+
+
+const PORT = process.argv[3] || 1112;
 const HOST = 'localhost';
 
 const socket = new net.Socket();
 
-let enemyMove = ''
+let enemyMove = '';
+let self = '';
 
 socket.connect(PORT, HOST, () => {
-    console.log(`Listening on ${HOST}:${PORT}`);
+    console.log(`[LOG] [TCP] Listening on ${HOST}:${PORT}`);
 })
 
 app.use(express.static('files'));
@@ -22,39 +26,65 @@ app.get('/', function (req, res) {
     res.sendFile(__dirname + "/" + "index.html");
 })
 
+
 app.get('/enemy', (req, res) => {
     res.send(enemyMove);
     enemyMove = ''
 })
 
-app.post('/move', function (req, res) {
-    console.log(req.body);
-    res.send('ACCEPT');
-    socket.write("abc" + req.body.from + req.body.to)
-    res.send(Math.random() > 0.5 ? 'ACCEPT' : 'ERROR');
+
+app.get('/whoami', (req, res) => {
+    const color = self.slice(2) == 0 ? 'black' : 'red';
+    console.log({color});
+    res.send({color});
 })
 
-var server = app.listen(8000, function () {
+let lastMoveStatus = ''
+
+app.get('/status', (req, res) => {
+    console.log(`[GET] status: ${lastMoveStatus}`);
+    res.send({status: lastMoveStatus})
+    lastMoveStatus = ''
+})
+
+app.post('/move', function (req, res) {
+    console.log(req.body);
+    socket.write("abc" + req.body.from + req.body.to)
+    res.send('posted');
+    // res.send(Math.random() > 0.5 ? 'ACCEPT' : 'ERROR');
+})
+
+var server = app.listen(appPort, function () {
     var host = server.address().address;
     var port = server.address().port;
-    console.log('Listening at http://%s:%s', host, port);
+    console.log(`[LOG] [HTTP] Listening at ${host}:${port}`);
 });
 
+socket.on('error', (e) => {
+    console.error(e)
+})
 
 socket.on('data', (buffer) => {
     const message = buffer.toString();
-    if (message === 'ACCEPT') {
-        console.log('Accepted!')
-        return;
+    console.log(`[LOG] [MESSAGE] ${message}`);
+    if (self === '') {
+        self = message.slice(0,3);
+        console.log(`[LOG] I am ${self}`);
     }
-    if (message === '0000000\0') {
-        console.log('You start!')
+    if (message.includes('ACCEPT')) {
+        lastMoveStatus = 'ACCEPT'
+    }
+    else if (message.includes('ERROR'))
+    {
+        lastMoveStatus = 'ERROR'
     }
     else {
-        console.log(`Data:`, buffer, buffer.toString());
         const str = buffer.toString()
         const move = { from: str.slice(3, 5), to: str.slice(5,7) }
         console.log({move});
         enemyMove = move
     }
 })
+
+// todo: jeżeli zamknięto socket
+// ustaw status dla kienta
