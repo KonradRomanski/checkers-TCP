@@ -1,9 +1,20 @@
 {
-  "dependencies": {
-    "body-parser": "^1.19.1",
-    "colors": "^1.4.0",
-    "enquirer": "^2.3.6",
-    "inquirer": "^8.2.0",
-    "node-static": "^0.7.11"
-  }
+    "name": "tcp-checkers",
+    "version": "1.0.0",
+    "main": "ex.js",
+    "dependencies": {
+        "body-parser": "^1.19.1",
+        "colors": "^1.4.0",
+        "enquirer": "^2.3.6",
+        "inquirer": "^8.2.0"
+    },
+    "devDependencies": {},
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "start": "node ex.js"
+    },
+    "keywords": [],
+    "author": "Konrad Romański",
+    "license": "private",
+    "description": ""
 }

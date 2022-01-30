@@ -53,10 +53,8 @@ pthread_cond_t cond_msg = PTHREAD_COND_INITIALIZER;
 
 class Game {
     public:
-    // int player1;
-    // int player2;
     int board[8][8];
-    int the_end;
+    bool the_end;
 
     Game()
     {
@@ -127,6 +125,7 @@ bool checkBasic(int fx, int fy, int tx, int ty)
     if (fy < 1 || fy > 8) return false;
     if (tx < 1 || tx > 8) return false;
     if (ty < 1 || ty > 8) return false;
+
     printf("[CHECK] [we shouldn't be the same] %d %d %d %d\n", fx, fy, tx, ty);
     if (fx == tx && fy == ty) return false;
 
@@ -148,12 +147,24 @@ int abs(int a)
 }
 
 // check if a move is proper
-bool checkIfProper(string check_this, int id,  int bo[][board_dim]){
+bool checkIfProper(string check_this, int id,  int bo[][board_dim], int oponent){
     int fromx = check_this[3] - '0';
     int fromy = check_this[4] - '0';
     int tox = check_this[5] - '0';
     int toy = check_this[6] - '0';
     int player = id;
+
+    if ((fromx == -48 && fromy == 3 && tox == 79 && toy == -48) || !check_this.size()) 
+    {
+        printf("[CHECK] THE END\n");
+       games[player]->the_end = true; 
+        turn[player] = false;
+        turn[oponent] = true;
+        broadcast(&cond_msg);
+    }
+
+    printf("\n[CHECK] message size: %ld\n", check_this.size());    
+    if (check_this.size() != 7) return false;
 
     for (int x = 0; x < 8; x++) {
         for (int y = 0; y < 8; y++) {
@@ -215,7 +226,6 @@ bool checkIfProper(string check_this, int id,  int bo[][board_dim]){
         return true;
     }
 
-    // if (check_this == "9999999") return 0;
     return false;
 }
 
@@ -223,6 +233,24 @@ string createID(int sd)
 {
     string socket = sd > 9 ? to_string(sd) : "0" + to_string(sd);
     return socket;
+}
+
+ssize_t write_nosigpipe(int fd, const char *buf, size_t len)
+{
+    sigset_t oldset, newset;
+    ssize_t result;
+    siginfo_t si;
+    struct timespec ts = {0};
+
+    sigemptyset(&newset);
+    sigaddset(&newset, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &newset, &oldset);
+
+    result = write(fd, buf, len);
+    while (sigtimedwait(&newset, &si, &ts)>=0 || errno != EAGAIN);
+    pthread_sigmask(SIG_SETMASK, &oldset, 0);
+
+    return result;
 }
 
 void *ThreadBehavior(void *t_data)
@@ -235,11 +263,6 @@ void *ThreadBehavior(void *t_data)
 
     printf("[BORN] [ID %d]\n", this_index);
     turn[this_index] = false;
-    // c_string empty_msg, comunicate;
-    // strncpy(empty_msg.str, "0000000", MSG_SIZE);
-    // lock(mutex_msg);
-    // msg[this_index] = empty_msg;
-    // unlock(mutex_msg);
 
     while(1) { 
         while (th_data->oponent == -9) {
@@ -251,13 +274,13 @@ void *ThreadBehavior(void *t_data)
                 turn[this_index] = true;
                 games[this_index] = new Game();
                 games[this_index]->setWhite(this_index);
-                games[this_index]->the_end = 0;
+                games[this_index]->the_end = false;
                 waiting_room.push(this_index);
                 // unlock(mutex_queue);
                 printf("[LOG] [ID %d] SLEEP on mutex_queue\n", this_index);
                 string identity_beg = createID(th_data->connection_socket_descriptor) + "0";
                 const char* ib = identity_beg.c_str();
-                write(th_data->connection_socket_descriptor, ib, strlen(ib));
+                write_nosigpipe(th_data->connection_socket_descriptor, ib, strlen(ib));
 
                 wait(&partner, &mutex_queue);
                 lock(mutex_map);
@@ -279,12 +302,12 @@ void *ThreadBehavior(void *t_data)
                 players[this_index] = temp_id;
                 games[this_index] = games[th_data->oponent];
                 games[this_index]->setBlack(this_index);
-                games[this_index]->the_end = 0;
+                games[this_index]->the_end = false;
                 unlock(mutex_map);
                 
                 string identity_beg = createID(th_data->connection_socket_descriptor) + "1";
                 const char* ib = identity_beg.c_str();
-                write(th_data->connection_socket_descriptor, ib, strlen(ib)+1);
+                write_nosigpipe(th_data->connection_socket_descriptor, ib, strlen(ib)+1);
 
                 broadcast(&partner);
             }
@@ -308,27 +331,33 @@ void *ThreadBehavior(void *t_data)
                     if(buff == '\x0a') continue;
                     fullmsg += buff;
                     if (fullmsg.size() == protocol_size) break;
-                }
-                if (if_proper == 0) 
-                {
-                    // -> ustaw w klasie, że koniec
-                    games[this_index]->the_end = 1;
-                    // -> ustaw turę przeciwnika
-                    turn[this_index] = false;
-                    turn[th_data->oponent] = true;
-                    // -> obudź przeciwnika
-                    broadcast(&cond_msg);
+                    printf("--\n");
+
                 }
 
-            while(!checkIfProper(fullmsg, this_index, games[this_index]->board)) {
+            while(!checkIfProper(fullmsg, this_index, games[this_index]->board, th_data->oponent)) {
                 fullmsg = "ERROR";
                 const char *pack = fullmsg.c_str();
-                write(th_data->connection_socket_descriptor, pack, strlen(pack)+1);
+                write_nosigpipe(th_data->connection_socket_descriptor, pack, strlen(pack)+1);
                 fullmsg = "";
-                while (read(th_data->connection_socket_descriptor, &buff, sizeof(char)) > 0) { 
+                while (if_proper = read(th_data->connection_socket_descriptor, &buff, sizeof(char)) > 0) { 
                     if(buff == '\x0a') continue;
                     fullmsg += buff;
                     if (fullmsg.size() == protocol_size) break;
+
+                }
+
+                if (if_proper == 0 || games[this_index]->the_end) 
+                {
+                    games[this_index]->the_end = true;
+                    turn[this_index] = false;
+                    turn[th_data->oponent] = true;
+                    broadcast(&cond_msg);
+                    close(th_data->connection_socket_descriptor);
+                    free(t_data);
+                    pthread_exit(NULL);
+
+                    break;
                 }
 
             }
@@ -339,7 +368,7 @@ void *ThreadBehavior(void *t_data)
             //SEND ACCEPT TO THE FRONTEND        
             fullmsg = "ACCEPT";
             const char *pack = fullmsg.c_str();
-            write(th_data->connection_socket_descriptor, pack, strlen(pack));
+            write_nosigpipe(th_data->connection_socket_descriptor, pack, strlen(pack));
             fullmsg = "";
             turn[this_index] = false;
             turn[th_data->oponent] = true;
@@ -347,43 +376,33 @@ void *ThreadBehavior(void *t_data)
         }
         else {
             while(!turn[this_index]) {
-                printf("[LOG] [ID %d] Not my turn", this_index);
+                printf("[LOG] [ID %d] Not my turn\n", this_index);
                 wait(&cond_msg, &mutex_msg);
-            }
-            
-            // -> jeżeli w klasie ustawiono koniec gry
-            if (games[this_index]->the_end) 
-            {
-            // -> zamknij socket
+                // -> jeżeli w klasie ustawiono koniec gry
+                if (games[this_index]->the_end) 
+                {
                     close(th_data->connection_socket_descriptor);
-            // (posprzątaj??)
                     free(t_data);
-            // zakończ wątek
                     pthread_exit(NULL);
+                }
             }
 
             //SEND MSG TO THE FRONTEND
             printf("[LOG] [ID %d] [SEND] oponent move \n", this_index);
             // strncpy(th_data->buff, msg[th_data->oponent].str, BUFF_SIZE);
-            const char* enemy_move = msg[th_data->oponent].str;
+            char* enemy_move = msg[th_data->oponent].str;
             printf("[LOG] [ID %d] [sending] %s\n", this_index, enemy_move);
-            write(th_data->connection_socket_descriptor, enemy_move, sizeof(enemy_move)+1);
+            write_nosigpipe(th_data->connection_socket_descriptor, enemy_move, sizeof(enemy_move)+1);
             unlock(mutex_msg);
         }
 
     }
 
-    // -> ustaw w klasie, że koniec
-    games[this_index]->the_end = 1;
-    // -> ustaw turę przeciwnika
+    games[this_index]->the_end = true;
     turn[this_index] = false;
     turn[th_data->oponent] = true;
-    // -> obudź przeciwnika
     broadcast(&cond_msg);
 
-    printf(" >>>> posprzątaj\n");
-
-    // -> zamknij socket
     close(th_data->connection_socket_descriptor);
     free(t_data);
     pthread_exit(NULL);
